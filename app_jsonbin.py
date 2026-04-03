@@ -1,104 +1,76 @@
-from flask import Flask, request, jsonify
-from jsonbin_client import JSONBinClient
-import os
+from flask import Flask, request, jsonify, redirect, session
+import requests, os, uuid
 
 app = Flask(__name__)
+app.secret_key = "secret123"
 
-# =======================
-# JSONBIN CONFIG (FIXED)
-# =======================
-API_KEY = os.environ.get("JSONBIN_API_KEY")
-BIN_ID = os.environ.get("JSONBIN_BIN_ID")
+# ================= JSONBIN CONFIG =================
+API_KEY = os.getenv("JSONBIN_API_KEY")
+BIN_ID = os.getenv("JSONBIN_BIN_ID")
 
-jsonbin_client = JSONBinClient(API_KEY, BIN_ID)
+URL = f"https://api.jsonbin.io/v3/b/{BIN_ID}"
 
+HEADERS = {
+    "X-Master-Key": API_KEY,
+    "Content-Type": "application/json"
+}
 
-# =======================
-# HOME
-# =======================
+def get_db():
+    res = requests.get(URL, headers=HEADERS)
+    if res.status_code == 200:
+        return res.json().get("record", {})
+    return {}
+
+def save_db(data):
+    requests.put(URL, headers=HEADERS, json=data)
+
+# ================= HOME =================
 @app.route("/")
 def home():
     return jsonify({"message": "EduTrack API running 🚀"})
 
-
-# =======================
-# REGISTER
-# =======================
+# ================= REGISTER =================
 @app.route("/register", methods=["POST"])
 def register():
     data = request.json
-    db = jsonbin_client.read_bin(BIN_ID)
+    db = get_db()
 
-    users = db.get("users", [])
-    users.append(data)
+    students = db.get("students", [])
 
-    db["users"] = users
-    jsonbin_client.update_bin(BIN_ID, db)
+    student = {
+        "id": str(uuid.uuid4()),
+        "username": data["username"],
+        "password": data["password"]
+    }
 
-    return jsonify({"message": "User registered"})
+    students.append(student)
+    db["students"] = students
+    save_db(db)
 
+    return jsonify({"message": "Registered successfully"})
 
-# =======================
-# LOGIN
-# =======================
+# ================= LOGIN =================
 @app.route("/login", methods=["POST"])
 def login():
     data = request.json
-    db = jsonbin_client.read_bin(BIN_ID)
+    db = get_db()
 
-    users = db.get("users", [])
+    students = db.get("students", [])
 
-    for user in users:
-        if user["username"] == data["username"] and user["password"] == data["password"]:
-            return jsonify({"message": "Login successful", "user": user})
+    for s in students:
+        if s["username"] == data["username"] and s["password"] == data["password"]:
+            return jsonify({"message": "Login success", "user": s})
 
-    return jsonify({"message": "Invalid credentials"}), 401
+    return jsonify({"message": "Invalid login"}), 401
 
-
-# =======================
-# WALLET
-# =======================
-@app.route("/wallet/<username>")
-def wallet(username):
-    db = jsonbin_client.read_bin(BIN_ID)
-    wallets = db.get("wallets", {})
-
-    return jsonify({"balance": wallets.get(username, 0)})
-
-
-@app.route("/wallet/add", methods=["POST"])
-def add_wallet():
-    data = request.json
-    db = jsonbin_client.read_bin(BIN_ID)
-
-    wallets = db.get("wallets", {})
-    wallets[data["username"]] = wallets.get(data["username"], 0) + data["amount"]
-
-    db["wallets"] = wallets
-    jsonbin_client.update_bin(BIN_ID, db)
-
-    return jsonify({"message": "Wallet updated"})
-
-
-# =======================
-# ANALYTICS
-# =======================
-@app.route("/analytics")
-def analytics():
-    db = jsonbin_client.read_bin(BIN_ID)
-
-    users = db.get("users", [])
-    wallets = db.get("wallets", {})
-
-    total_balance = sum(wallets.values())
-
+# ================= DASHBOARD =================
+@app.route("/dashboard")
+def dashboard():
+    db = get_db()
+    students = db.get("students", [])
     return jsonify({
-        "total_users": len(users),
-        "total_balance": total_balance
+        "total_students": len(students)
     })
 
-
-# =======================
-# VERCEL COMPATIBILITY
-# =======================
+# ================= VERCEL =================
 application = app
