@@ -1,10 +1,9 @@
-from flask import Flask, request, jsonify, redirect, session
+from flask import Flask, request, jsonify
 import requests, os, uuid
 
 app = Flask(__name__)
-app.secret_key = "secret123"
 
-# ================= JSONBIN CONFIG =================
+# JSONBin config
 API_KEY = os.getenv("JSONBIN_API_KEY")
 BIN_ID = os.getenv("JSONBIN_BIN_ID")
 
@@ -30,46 +29,46 @@ def home():
     return jsonify({"message": "EduTrack API running 🚀"})
 
 # ================= REGISTER =================
-@app.route("/register", methods=["POST"])
+@app.route("/api/register", methods=["POST"])
 def register():
     data = request.json
     db = get_db()
 
-    students = db.get("students", [])
+    users = db.get("users", [])
 
-    student = {
+    users.append({
         "id": str(uuid.uuid4()),
         "username": data["username"],
         "password": data["password"]
-    }
+    })
 
-    students.append(student)
-    db["students"] = students
+    db["users"] = users
     save_db(db)
 
     return jsonify({"message": "Registered successfully"})
 
 # ================= LOGIN =================
-@app.route("/login", methods=["POST"])
+@app.route("/api/login", methods=["POST"])
 def login():
     data = request.json
     db = get_db()
 
-    students = db.get("students", [])
+    users = db.get("users", [])
 
-    for s in students:
-        if s["username"] == data["username"] and s["password"] == data["password"]:
-            return jsonify({"message": "Login success", "user": s})
+    for u in users:
+        if u["username"] == data["username"] and u["password"] == data["password"]:
+            return jsonify({"message": "Login success", "user": u})
 
     return jsonify({"message": "Invalid login"}), 401
 
 # ================= DASHBOARD =================
-@app.route("/dashboard")
+@app.route("/api/dashboard")
 def dashboard():
     db = get_db()
-    students = db.get("students", [])
+    users = db.get("users", [])
+
     return jsonify({
-        "total_students": len(students)
+        "total_users": len(users)
     })
 
 # ================= VERCEL =================
